@@ -32,6 +32,10 @@ catch (Exception ex)
 	AnsiConsole.MarkupLine($"[red]Unhandled error:[/] {Markup.Escape(ex.Message)}");
 	Environment.ExitCode = 1;
 }
+finally
+{
+	WaitForUserBeforeExit();
+}
 
 static void ConfigureConsoleForUnicode()
 {
@@ -44,5 +48,24 @@ static void ConfigureConsoleForUnicode()
 	catch
 	{
 		// If the host does not allow changing encodings, continue with defaults.
+	}
+}
+
+static void WaitForUserBeforeExit()
+{
+	if (!Environment.UserInteractive || Console.IsInputRedirected)
+	{
+		return;
+	}
+
+	AnsiConsole.MarkupLine("[grey]Press Enter to close...[/]");
+
+	try
+	{
+		Console.ReadLine();
+	}
+	catch
+	{
+		// If reading input is not supported by the host, just exit.
 	}
 }
