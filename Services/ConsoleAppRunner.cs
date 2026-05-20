@@ -32,68 +32,89 @@ public sealed class ConsoleAppRunner
         AnsiConsole.MarkupLine("Reads Gmail labels and exports selected label messages as .eml files.");
 
         using GmailService gmailService = await _authService.CreateServiceAsync(cancellationToken);
-        IReadOnlyList<GmailLabelInfo> labels = GmailLabelService.GetLabels(gmailService);
-
-        if (labels.Count == 0)
-        {
-            AnsiConsole.MarkupLine("[yellow]No labels were found in this Gmail account.[/]");
-            return;
-        }
-
-        GmailLabelInfo selectedLabel = PromptForLabel(labels);
         string outputRoot = ResolveOutputRoot();
         _fileService.EnsureDirectory(outputRoot);
 
-        string labelOutputDirectory = _emlExportService.PrepareLabelOutputDirectory(outputRoot, selectedLabel.Name);
-
-        IReadOnlyList<string> messageIds = GmailMessageService.GetMessageIdsForLabel(gmailService, selectedLabel.Id);
-        if (messageIds.Count == 0)
+        while (true)
         {
-            AnsiConsole.MarkupLine($"[yellow]No messages found for label:[/] {Markup.Escape(selectedLabel.Name)}");
-            AnsiConsole.MarkupLine($"Output folder created at: {Markup.Escape(labelOutputDirectory)}");
-            return;
-        }
+            IReadOnlyList<GmailLabelInfo> labels = GmailLabelService.GetLabels(gmailService);
 
-        AnsiConsole.MarkupLine($"Selected label: [aqua]{Markup.Escape(selectedLabel.Name)}[/]");
-        AnsiConsole.MarkupLine($"Messages to export: [aqua]{messageIds.Count}[/]");
+            if (labels.Count == 0)
+            {
+                AnsiConsole.MarkupLine("[yellow]No labels were found in this Gmail account.[/]");
+                return;
+            }
 
-        ExportResult? result = null;
-        AnsiConsole.Progress().Start(context => {
-            ProgressTask task = context.AddTask("[green]Exporting emails[/]", maxValue: messageIds.Count);
-            result = _emlExportService.ExportMessages(gmailService, labelOutputDirectory, messageIds, () => task.Increment(1));
-        });
+            GmailLabelInfo? selectedLabel = PromptForLabelOrQuit(labels);
+            if (selectedLabel is null)
+            {
+                AnsiConsole.MarkupLine("[grey]Goodbye.[/]");
+                return;
+            }
 
-        if (result is null)
-        {
-            throw new InvalidOperationException("Export finished unexpectedly without a result.");
-        }
+            string labelOutputDirectory = _emlExportService.PrepareLabelOutputDirectory(outputRoot, selectedLabel.Name);
 
-        _emlExportService.WriteExportLog(labelOutputDirectory, result);
+            IReadOnlyList<string> messageIds = GmailMessageService.GetMessageIdsForLabel(gmailService, selectedLabel.Id);
+            if (messageIds.Count == 0)
+            {
+                AnsiConsole.MarkupLine($"[yellow]No messages found for label:[/] {Markup.Escape(selectedLabel.Name)}");
+                AnsiConsole.MarkupLine($"Output folder created at: {Markup.Escape(labelOutputDirectory)}");
+                AnsiConsole.WriteLine();
+                continue;
+            }
 
-        AnsiConsole.MarkupLine("[bold green]Export finished.[/]");
-        AnsiConsole.MarkupLine($"Exported: [green]{result.ExportedCount}[/]");
-        AnsiConsole.MarkupLine($"Failed: [red]{result.FailedCount}[/]");
-        AnsiConsole.MarkupLine($"Output folder: {Markup.Escape(labelOutputDirectory)}");
+            AnsiConsole.MarkupLine($"Selected label: [aqua]{Markup.Escape(selectedLabel.Name)}[/]");
+            AnsiConsole.MarkupLine($"Messages to export: [aqua]{messageIds.Count}[/]");
 
-        if (result.FailedCount > 0)
-        {
-            AnsiConsole.MarkupLine("[yellow]See export-log.txt in the output folder for failed message IDs.[/]");
-        }
-    }
-
-    private static GmailLabelInfo PromptForLabel(IReadOnlyList<GmailLabelInfo> labels)
-    {
-        var prompt = new SelectionPrompt<GmailLabelInfo>()
-            .Title("Select a Gmail label")
-            .PageSize(Math.Min(labels.Count, 20))
-            .UseConverter(label => {
-                string countText = label.MessagesTotal?.ToString(CultureInfo.InvariantCulture) ?? "?";
-                return $"{label.Name} ({countText})";
+            ExportResult? result = null;
+            AnsiConsole.Progress().Start(context => {
+                ProgressTask task = context.AddTask("[green]Exporting emails[/]", maxValue: messageIds.Count);
+                result = _emlExportService.ExportMessages(gmailService, labelOutputDirectory, messageIds, () => task.Increment(1));
             });
 
-        prompt.AddChoices(labels);
-        return AnsiConsole.Prompt(prompt);
+            if (result is null)
+            {
+                throw new InvalidOperationException("Export finished unexpectedly without a result.");
+            }
+
+            _emlExportService.WriteExportLog(labelOutputDirectory, result);
+
+            AnsiConsole.MarkupLine("[bold green]Export finished.[/]");
+            AnsiConsole.MarkupLine($"Exported: [green]{result.ExportedCount}[/]");
+            AnsiConsole.MarkupLine($"Failed: [red]{result.FailedCount}[/]");
+            AnsiConsole.MarkupLine($"Output folder: {Markup.Escape(labelOutputDirectory)}");
+
+            if (result.FailedCount > 0)
+            {
+                AnsiConsole.MarkupLine("[yellow]See export-log.txt in the output folder for failed message IDs.[/]");
+            }
+
+            AnsiConsole.WriteLine();
+        }
     }
+
+    private static GmailLabelInfo? PromptForLabelOrQuit(IReadOnlyList<GmailLabelInfo> labels)
+    {
+        List<LabelSelectionOption> options = labels
+            .Select(label => {
+                string countText = label.MessagesTotal.ToString(CultureInfo.InvariantCulture);
+                return new LabelSelectionOption(label, $"{label.Name} ({countText})");
+            })
+            .ToList();
+
+        options.Add(new LabelSelectionOption(null, "Quit"));
+
+        var prompt = new SelectionPrompt<LabelSelectionOption>()
+            .Title("Select a Gmail label")
+            .PageSize(Math.Min(options.Count, 20))
+            .UseConverter(option => option.DisplayText);
+
+        prompt.AddChoices(options);
+        LabelSelectionOption selected = AnsiConsole.Prompt(prompt);
+        return selected.Label;
+    }
+
+    private readonly record struct LabelSelectionOption(GmailLabelInfo? Label, string DisplayText);
 
     private string ResolveOutputRoot()
     {
