@@ -1,0 +1,19 @@
+<Project>
+  <Import Project="$(AtomBuildDirectory)/PackageVersions.props" />
+
+  <ItemGroup>
+    <!-- Microsoft dependencies -->
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.3" />
+
+    <!-- Third-party dependencies -->
+    <PackageVersion Include="Google.Apis.Gmail.v1" Version="1.70.0.3819" />
+    <PackageVersion Include="Google.Apis.Auth" Version="1.70.0" />
+    <PackageVersion Include="Google.Apis.Core" Version="1.70.0" />
+    <PackageVersion Include="MimeKit" Version="4.16.0" />
+    <PackageVersion Include="Spectre.Console" Version="0.50.0" />
+
+    <!-- Atom Framework -->
+    <PackageVersion Include="Genius.Atom.Infrastructure" Version="$(AtomPackageVersion)" />
+  </ItemGroup>
+</Project>

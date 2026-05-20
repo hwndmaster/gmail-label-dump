@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+output/
+credentials.json
+*.user
+*.suo
+*.cache
+*.db
+*.log
+.local/

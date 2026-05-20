@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"**/obj": true,
+			"**/bin": true
+		},
+		"chat.tools.terminal.autoApprove": {
+			"dotnet list": true,
+			"dotnet run": true,
+			"dotnet test": true,
+			"mkdir": true,
+			"New-Item": true,
+			"Test-Path": true
+		}
+	},
+}
